@@ -19,7 +19,6 @@ router.post('/:warhouse',
             check("name", "Name is required").not().isEmpty(), //To be there and not empty   
             check("tlphn", "tlphn is required").not().isEmpty(), //To be there and not empty 
             check("adresse", "adresse is required").not().isEmpty(), //To be there and not empty 
-            check("produits", "produits is required").not().isEmpty(), //To be there and not empty  
             check("currency", "currency is required").not().isEmpty(), //To be there and not empty   
         ],
     ],
@@ -37,11 +36,11 @@ router.post('/:warhouse',
 
 
             const newOrder = new Order({
+                name: this.name,
                 warhouse: warhouse,
                 seller: seller.id,
                 tlphn: req.body.tlphn,
                 adresse: req.body.adresse,
-                produits: req.body.produits,
                 currency: req.body.currency,
                 dateUpdated: null
             })
@@ -56,6 +55,88 @@ router.post('/:warhouse',
     });
 
 
+//@route    PUT api/Order/product/:idOrder
+//@desc     Add a product
+//@access   Private
+router.put('/product/:id', [
+    auth,
+    [
+        check("produit", "produit is required").not().isEmpty(), //To be there and not empty   
+        check("quantite", "quantite is required").not().isEmpty(), //To be there and not empty 
+        check("prix", "prix is required").not().isEmpty(), //To be there and not empty 
+    ],
+
+], async (req, res) => {
+    try {
+        const { id } = req.params; // Use 'id' to identify the order
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        //req.user.id
+        const seller = req.seller.id;
+
+        // Find the order by ID and update it
+        let order = await Order.findById(id);
+        if (!order) {
+            return res.status(404).json({ msg: 'Order not found' });
+        } else if (order.seller != seller) {
+            return res.status(401).json({ msg: 'Have not Access' });
+        }
+
+        order.produitss.unshift({
+            produit: req.body.produit,
+            quantite: req.body.quantite,
+            prix: req.body.prix
+        });
+        await order.save();
+
+        res.json(order.produitss);
+
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('server Error');
+    }
+});
+
+
+//@route    PUT api/Order/product/:idProduct
+//@desc     Delete product
+//@access   Private
+router.delete('/product/:id/:id_Product', auth, async (req, res) => {
+    try {
+        const { id,id_Product } = req.params; // Use 'id' to identify the order
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        //req.user.id
+        const seller = req.seller.id;
+
+        // Find the order by ID and update it
+        let order = await Order.findById(id);
+
+        const product = order.produitss.find(product => product.id === id_Product);
+        //Make sure comment exist
+        if(!product){
+            return res.status(404).json({msg : 'product does not exist'})
+        }
+
+        product.status = true
+        
+        await order.save()
+        res.json(order.produitss)
+
+
+    } catch (err) {
+        console.error(err.message)
+        res.status(500).send('server Error');
+    }
+
+});
+
+
+
 
 //@route    PUT api/Order/:idOrder
 //@desc     Update Order 
@@ -67,7 +148,6 @@ router.put('/:id',
             check("name", "Name is required").not().isEmpty(), // To be there and not empty
             check("tlphn", "tlphn is required").not().isEmpty(), // To be there and not empty
             check("adresse", "adresse is required").not().isEmpty(), // To be there and not empty
-            check("produits", "produits is required").not().isEmpty(), // To be there and not empty
             check("currency", "currency is required").not().isEmpty(), // To be there and not empty
         ],
     ],
@@ -79,17 +159,21 @@ router.put('/:id',
                 return res.status(400).json({ errors: errors.array() });
             }
 
+            //req.user.id
+            const seller = req.seller.id;
+
             // Find the order by ID and update it
             let order = await Order.findById(id);
             if (!order) {
                 return res.status(404).json({ msg: 'Order not found' });
+            } else if (order.seller !== seller) {
+                return res.status(401).json({ msg: 'Have not Access' });
             }
 
             // Update the order
             order.warhouse = req.body.warhouse || order.warhouse;
             order.tlphn = req.body.tlphn || order.tlphn;
             order.adresse = req.body.adresse || order.adresse;
-            order.produits = req.body.produits || order.produits;
             order.currency = req.body.currency || order.currency;
             order.dateUpdated = Date.now();
 
@@ -104,7 +188,7 @@ router.put('/:id',
 
 
 //@route    PUT api/Order/:idOrder
-//@desc     Update Order 
+//@desc     Delete Order 
 //@access   Private
 router.delete('/:id',
     [
@@ -118,10 +202,15 @@ router.delete('/:id',
                 return res.status(400).json({ errors: errors.array() });
             }
 
+            //req.user.id
+            const seller = req.seller.id;
+
             // Find the order by ID and update it
             let order = await Order.findById(id);
             if (!order) {
                 return res.status(404).json({ msg: 'Order not found' });
+            } else if (order.seller !== seller) {
+                return res.status(401).json({ msg: 'Have not Access' });
             }
 
             // Update the order
@@ -140,22 +229,33 @@ router.delete('/:id',
 
 
 //@route    GET api/Order/
-//@desc     Get all OrderS
+//@desc     Get all Orders
 //@access   Public
-router.get('',
-    [
-        auth,
-    ], async (req, res) => {
-
+router.get('/',
+    auth,
+    async (req, res) => {
         try {
-            order = await Order.find({ status: false }).sort({ date: -1 });
+            const seller = req.seller.id;
 
-            return res.status(200).json(order);
+            const orders = await Order.find({
+                status: false,
+                seller: seller
+            }).sort({ date: -1 });
+
+            // Filter the produitss array in the application logic
+            const filteredOrders = orders.map(order => {
+                order.produitss = order.produitss.filter(produit => produit.status === false);
+                return order;
+            });
+
+            return res.status(200).json(filteredOrders);
         } catch (err) {
-            console.error(err.message)
-            res.status(500).send('server Error');
+            console.error(err.message);
+            res.status(500).send('Server Error');
         }
-    });
+    }
+);
+
 
 
 module.exports = router;

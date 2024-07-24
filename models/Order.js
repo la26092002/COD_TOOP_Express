@@ -25,6 +25,26 @@ const OrderSchema = new mongoose.Schema({
         type: String,
         require: true
     },
+    produitss: [
+        {
+            produit: {
+                type: Schema.Types.ObjectId,
+                ref: 'product'
+            },
+            quantite: {
+                type: Number,
+                require: true
+            },
+            prix: {
+                type: Number,
+                require: true
+            },
+            status: {
+                type: Boolean,
+                default: false
+            },
+        }
+    ],
     currency: {
         type: String,
         require: true
