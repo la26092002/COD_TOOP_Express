@@ -5,8 +5,7 @@ const cors = require('cors')
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-const https = require('https');
-const fs = require('fs');
+
 
 const app = express();
 dotenv.config();
